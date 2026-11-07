@@ -135,4 +135,4 @@ async (page) => {
     fontRequests,
     pageErrors: errors,
   };
-};
+}

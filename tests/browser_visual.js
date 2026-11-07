@@ -130,4 +130,4 @@ async (page) => {
     reducedMotion: reduced,
     pageErrors: errors,
   };
-};
+}

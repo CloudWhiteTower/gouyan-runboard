@@ -170,4 +170,4 @@ async (page) => {
     ],
     store: "isolated 7311",
   };
-};
+}

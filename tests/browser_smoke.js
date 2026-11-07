@@ -89,4 +89,4 @@ async (page) => {
     ],
     pageErrors: errors,
   };
-};
+}
