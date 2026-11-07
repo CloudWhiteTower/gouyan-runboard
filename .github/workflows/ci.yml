@@ -1,0 +1,41 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Create isolated environment
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install -e ".[server,dev]"
+      - name: Test SDK and API
+        run: |
+          .venv/bin/python -m ruff format --check src scripts tests examples
+          .venv/bin/python -m pytest -q
+      - name: Build web UI and Python packages
+        run: .venv/bin/python scripts/build_release.py
+      - name: Check frontend formatting
+        run: npm run format:check --prefix frontend
+      - name: Check packaged SDK and assets
+        run: |
+          python -m venv .sdk-check
+          .sdk-check/bin/python -m pip install --no-deps dist/*.whl
+          .sdk-check/bin/python -c "from runboard import Run; import importlib.util; from pathlib import Path; import runboard; assert importlib.util.find_spec('mlflow') is None; assert (Path(runboard.__file__).parent / 'web/index.html').is_file()"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gouyan-runboard
+          path: dist/*

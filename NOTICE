@@ -1,0 +1,11 @@
+构研 RunBoard
+Copyright 2026 RunBoard contributors
+
+This project is licensed under the Apache License, Version 2.0.
+The Chinese interface and application integration are original project code.
+MLflow, Optuna and Apache ECharts are used through their public interfaces.
+No source code from W&B, Aim, SwanLab or other proprietary products is included.
+Bundled frontend dependencies retain their respective licenses; see
+src/runboard/web/THIRD_PARTY_LICENSES.txt.
+
+Fonts are selected from the user operating system. No font files are distributed.

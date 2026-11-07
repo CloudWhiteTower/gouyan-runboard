@@ -1,0 +1,8 @@
+include LICENSE NOTICE README.md CHANGELOG.md
+recursive-include src/runboard/web *
+recursive-include frontend *.json *.ts *.tsx *.css *.html *.svg
+prune frontend/node_modules
+recursive-include scripts *.py
+recursive-include examples *.py
+recursive-include tests *.py *.js
+include ARCHITECTURE.md FEATURES.md start.ps1
