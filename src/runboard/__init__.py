@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import math
 import time
 import os
 from pathlib import Path
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 
 class Run:
@@ -73,6 +74,16 @@ class Run:
     @property
     def next_step(self):
         return self._step
+
+    def log_epoch(self, epoch: int, seconds: float):
+        """Record one completed, 1-based epoch independently of batch steps."""
+        if type(epoch) is not int or epoch < 1:
+            raise ValueError("已完成轮次须为从 1 开始的整数。")
+        if not math.isfinite(seconds) or seconds <= 0:
+            raise ValueError("单轮耗时须为大于 0 的有限秒数。")
+        self.store.log(
+            self.id, {"epoch/completed": epoch, "epoch/seconds": seconds}, epoch
+        )
 
     def system(self, step=None):
         """Explicit process telemetry; no environment variables are collected."""

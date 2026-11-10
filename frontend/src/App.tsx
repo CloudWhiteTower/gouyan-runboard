@@ -42,6 +42,7 @@ import {
   statusLabel,
   sourceLabel,
   date,
+  duration,
   download,
 } from "./data";
 import { Curves, Parallel, TimeAxis } from "./Charts";
@@ -107,7 +108,7 @@ export default function App() {
     [query, setQuery] = useState(""),
     [status, setStatus] = useState("all"),
     [selected, setSelected] = useState<string[]>([]),
-    [detail, setDetail] = useState<string | null>(null),
+    [detail, setDetail] = useState<{ id: string; tab?: "params" } | null>(null),
     [modal, setModal] = useState<Modal>(null),
     [notice, setNotice] = useState(""),
     [error, setError] = useState(""),
@@ -210,7 +211,7 @@ export default function App() {
             b.start_time - a.start_time,
     );
   const chosen = runs.filter((r) => selected.includes(r.id)),
-    activeRun = runs.find((r) => r.id === detail);
+    activeRun = runs.find((r) => r.id === detail?.id);
   const chartRuns = page === "compare" ? chosen : filtered.slice(0, 6);
   const metrics = [...new Set(chartRuns.flatMap((r) => Object.keys(r.metrics)))]
     .filter((k) => !k.startsWith("system/") && k !== "epoch")
@@ -369,6 +370,9 @@ export default function App() {
               </th>
               <th>实验名称</th>
               <th>状态</th>
+              <th>训练轮次</th>
+              <th>平均每轮</th>
+              <th>预计剩余</th>
               {!compact && <th>来源</th>}
               <th className="number">验证损失</th>
               {!compact && <th className="number">验证准确率</th>}
@@ -394,7 +398,7 @@ export default function App() {
                   <button
                     className="run-name"
                     title={r.name}
-                    onClick={() => setDetail(r.id)}
+                    onClick={() => setDetail({ id: r.id })}
                   >
                     <span
                       className="run-dot"
@@ -413,6 +417,25 @@ export default function App() {
                 </td>
                 <td>
                   <Status run={r} />
+                </td>
+                <td className="nowrap mono">
+                  {r.progress.completed ?? "—"}
+                  {r.progress.total !== null && ` / ${r.progress.total}`}
+                  {r.progress.total !== null &&
+                    r.progress.completed !== null && (
+                      <progress
+                        className="epoch-progress"
+                        aria-label={`${r.name} 训练进度`}
+                        value={Math.min(r.progress.completed, r.progress.total)}
+                        max={r.progress.total}
+                      />
+                    )}
+                </td>
+                <td className="nowrap mono">
+                  {duration(r.progress.average_seconds)}
+                </td>
+                <td className="nowrap mono">
+                  {duration(r.progress.remaining_seconds)}
                 </td>
                 {!compact && (
                   <td>
@@ -435,27 +458,36 @@ export default function App() {
                 )}
                 <td className="muted nowrap mono date">{date(r.start_time)}</td>
                 <td>
-                  <button
-                    className={cls(
-                      "icon-button",
-                      r.tags["runboard.pinned"] === "true" && "pinned",
-                    )}
-                    title="置顶实验"
-                    onClick={() =>
-                      act(
-                        () =>
-                          api(`/runs/${r.id}`, {
-                            method: "PATCH",
-                            body: JSON.stringify({
-                              pinned: r.tags["runboard.pinned"] !== "true",
+                  <div className="run-actions">
+                    <button
+                      className="tiny"
+                      aria-label={`查看 ${r.name} 的超参数`}
+                      onClick={() => setDetail({ id: r.id, tab: "params" })}
+                    >
+                      参数
+                    </button>
+                    <button
+                      className={cls(
+                        "icon-button",
+                        r.tags["runboard.pinned"] === "true" && "pinned",
+                      )}
+                      title="置顶实验"
+                      onClick={() =>
+                        act(
+                          () =>
+                            api(`/runs/${r.id}`, {
+                              method: "PATCH",
+                              body: JSON.stringify({
+                                pinned: r.tags["runboard.pinned"] !== "true",
+                              }),
                             }),
-                          }),
-                        "已更新置顶状态",
-                      )
-                    }
-                  >
-                    <Pin size={13} />
-                  </button>
+                          "已更新置顶状态",
+                        )
+                      }
+                    >
+                      <Pin size={13} />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -1179,7 +1211,7 @@ export default function App() {
                                 {t.run_id && (
                                   <button
                                     className="text-button"
-                                    onClick={() => setDetail(t.run_id!)}
+                                    onClick={() => setDetail({ id: t.run_id! })}
                                   >
                                     查看实验 <ArrowUpRight size={13} />
                                   </button>
@@ -1265,6 +1297,7 @@ export default function App() {
         <RunDetail
           key={activeRun.id}
           run={activeRun}
+          initialTab={detail?.tab}
           close={() => setDetail(null)}
           refresh={refresh}
           toast={toast}

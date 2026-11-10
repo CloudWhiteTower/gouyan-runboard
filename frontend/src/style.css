@@ -584,6 +584,19 @@ tbody tr:last-child td {
 .runs-table tr.selected td {
   background: #fcf2eb;
 }
+.epoch-progress {
+  display: block;
+  width: 100%;
+  min-width: 64px;
+  height: 4px;
+  margin-top: 6px;
+  accent-color: var(--red);
+}
+.run-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .status {
   display: inline-flex;
   align-items: center;

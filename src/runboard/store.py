@@ -8,6 +8,7 @@ import os
 import sqlite3
 import time
 from contextlib import closing, contextmanager
+from functools import lru_cache
 from pathlib import Path
 
 os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
@@ -86,6 +87,71 @@ class Store:
         self.client.log_batch(
             run_id, metrics=[Metric(k, float(v), now, step) for k, v in values.items()]
         )
+        if values.keys() & {
+            "epoch/completed",
+            "epoch/seconds",
+            "epoch",
+            "epoch/minutes",
+        }:
+            self.epoch_timings.cache_clear()
+
+    @lru_cache(maxsize=2048)
+    def epoch_timings(self, run_id, duration_key, latest_epoch, latest_duration):
+        """Reuse aggregates between polls, keyed by the latest MLflow metrics."""
+        durations = self.history(run_id, duration_key)
+        if duration_key == "epoch/seconds":
+            by_epoch = {p["step"]: p["value"] for p in durations if p["value"] > 0}
+        else:
+            # Older adapters recorded epoch numbers and durations on the batch axis.
+            epochs = {p["step"]: p["value"] for p in self.history(run_id, "epoch")}
+            by_epoch = {}
+            for point in sorted(durations, key=lambda p: p["timestamp"]):
+                epoch = epochs.get(point["step"], 0)
+                if epoch > 0 and float(epoch).is_integer() and point["value"] > 0:
+                    by_epoch[int(epoch)] = point["value"] * 60
+        if not by_epoch:
+            return None, None
+        return max(by_epoch), math.fsum(by_epoch.values()) / len(by_epoch)
+
+    def epoch_progress(self, run_id, config, metrics, status):
+        total = None
+        wrapped = config.get("config", {})
+        for settings in (
+            config,
+            config.get("training"),
+            wrapped,
+            wrapped.get("training") if isinstance(wrapped, dict) else None,
+        ):
+            if not isinstance(settings, dict):
+                continue
+            for key in ("total_epochs", "max_epochs", "epochs", "num_epochs"):
+                value = settings.get(key)
+                if type(value) is int and value > 0:
+                    total = value
+                    break
+            if total is not None:
+                break
+
+        completed, average = None, None
+        if "epoch/completed" in metrics:
+            completed = int(metrics["epoch/completed"])
+            if "epoch/seconds" in metrics:
+                _, average = self.epoch_timings(
+                    run_id, "epoch/seconds", completed, metrics["epoch/seconds"]
+                )
+        elif "epoch" in metrics and "epoch/minutes" in metrics:
+            completed, average = self.epoch_timings(
+                run_id, "epoch/minutes", metrics["epoch"], metrics["epoch/minutes"]
+            )
+
+        return {
+            "completed": completed,
+            "total": total,
+            "average_seconds": average,
+            "remaining_seconds": max(0, total - completed) * average
+            if status == "RUNNING" and None not in (total, completed, average)
+            else None,
+        }
 
     def update_config(self, run_id, config):
         clean_config(config)
@@ -115,6 +181,7 @@ class Store:
             (
                 p.step
                 for key in run.data.metrics
+                if key not in ("epoch/completed", "epoch/seconds")
                 for p in self.client.get_metric_history(run_id, key)
             ),
             default=-1,
@@ -152,6 +219,7 @@ class Store:
 
     def run_dict(self, run):
         info, data = run.info, run.data
+        config = json.loads(data.tags.get("runboard.config", "{}"))
         return {
             "id": info.run_id,
             "name": info.run_name or info.run_id[:8],
@@ -162,7 +230,10 @@ class Store:
             "metrics": data.metrics,
             "params": data.params,
             "tags": data.tags,
-            "config": json.loads(data.tags.get("runboard.config", "{}")),
+            "config": config,
+            "progress": self.epoch_progress(
+                info.run_id, config, data.metrics, info.status
+            ),
         }
 
     def projects(self):

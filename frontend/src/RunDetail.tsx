@@ -16,6 +16,7 @@ import { useDismiss } from "./motion";
 
 export function RunDetail({
   run,
+  initialTab = "metrics",
   close,
   refresh,
   toast,
@@ -23,6 +24,7 @@ export function RunDetail({
   onTemplate,
 }: {
   run: Run;
+  initialTab?: "params" | "metrics";
   close: () => void;
   refresh: () => Promise<void>;
   toast: (s: string) => void;
@@ -30,7 +32,7 @@ export function RunDetail({
   onTemplate: () => void;
 }) {
   const { leaving, dismiss } = useDismiss(close);
-  const [tab, setTab] = useState("metrics"),
+  const [tab, setTab] = useState<string>(initialTab),
     [metric, setMetric] = useState(
       Object.keys(run.metrics).find((key) => key.includes("loss")) ||
         Object.keys(run.metrics)[0] ||

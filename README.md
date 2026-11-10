@@ -10,6 +10,7 @@
 
 - **记录与比较**：指标、超参数、标签、分组、笔记、最近/最优值和基线差异。
 - **训练监控**：CPU、内存、磁盘、网络和 NVIDIA GPU；文本与显式控制台日志。
+- **多任务进度**：同屏查看各实验的训练轮次、平均每轮耗时、预计剩余时间和超参数。
 - **实验管理**：续记、参数模板版本、CSV/JSON 导出、TensorBoard 日志导入。
 - **搜索**：Optuna TPE、随机、网格，以及自定义训练函数。
 - **文件与图表**：任意文件上传下载，文本/图片/音视频预览，自定义 ECharts 和直方图，PDB Cα骨架旋转。
@@ -23,7 +24,7 @@ Python 3.10+。项目尚未发布到 PyPI，安装包从 [GitHub Releases](https
 
 ```powershell
 python -m venv .venv
-.venv/Scripts/python -m pip install "./gouyan_runboard-0.2.1-py3-none-any.whl[server]"
+.venv/Scripts/python -m pip install "./gouyan_runboard-0.3.0-py3-none-any.whl[server]"
 .venv/Scripts/python -m runboard.cli serve
 ```
 
@@ -42,20 +43,28 @@ runboard --home ./runboard-data serve --workspace ./research --port 7310
 训练端只安装基础 wheel，SDK 没有强制第三方依赖。训练端与服务端可使用不同环境。
 
 ```python
+from time import perf_counter
+
 from runboard import Run
 
+total_epochs = 20
 with Run(
     project="固定骨架酶设计",
     name="baseline",
-    config={"learning_rate": 0.001, "seed": 42},
+    config={"total_epochs": total_epochs, "learning_rate": 0.001, "seed": 42},
     group="GATv2", labels=["baseline"],
     monitor_interval=10, record_environment=True,
 ) as run:
-    for step, batch in enumerate(train_loader):
-        loss = train_step(batch)
-        run.log({"train/loss": float(loss)}, step=step)
+    for epoch in range(1, total_epochs + 1):
+        started = perf_counter()
+        for batch in train_loader:
+            loss = train_step(batch)
+            run.log({"train/loss": float(loss)})
+        run.log_epoch(epoch, perf_counter() - started)
     run.artifact("best_model.pt", folder="checkpoints")
 ```
+
+每个训练任务使用独立的 `Run`。`log_epoch()` 在该轮完成后记录从 1 开始的轮次与实测秒数，续记时沿用 checkpoint 中的轮次。实验列表按 `剩余轮数 × 已完成轮次平均耗时` 估算在跑任务的剩余时间。总轮数或耗时未记录时，对应数值显示为 `—`。
 
 默认连接本机7310服务；可通过 `server=` 或 `RUNBOARD_URL` 设置本机其他端口。直接数据库模式使用 `home=`，该模式需要服务端依赖。
 
@@ -76,6 +85,8 @@ trainer.fit(model, datamodule=datamodule)
 ```
 
 保留模型中的 `self.log(...)`，使用 `self.save_hyperparameters()` 记录构造参数。Logger 支持 `run_id`、`group` 和 `labels`。
+
+需要轮次进度时，可通过 `logger.experiment.params({"total_epochs": trainer.max_epochs})` 记录总轮数，在 rank 0 的训练回调中计时并调用 `logger.experiment.log_epoch(trainer.current_epoch + 1, elapsed_seconds)`。
 
 ### 日志、分布与续记
 

@@ -9,6 +9,12 @@ export type Run = {
   params: Record<string, string>;
   tags: Record<string, string>;
   config: Record<string, unknown>;
+  progress: {
+    completed: number | null;
+    total: number | null;
+    average_seconds: number | null;
+    remaining_seconds: number | null;
+  };
 };
 export type Point = { step: number; value: number; timestamp: number };
 export type Project = { id: string; name: string };
@@ -65,6 +71,15 @@ export const numeric = (v: unknown) =>
     : v === undefined
       ? "—"
       : String(v);
+export function duration(seconds: number | null) {
+  if (seconds === null) return "—";
+  if (seconds < 60) return `${Number(seconds.toFixed(1))} 秒`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes} 分 ${Math.floor(seconds % 60)} 秒`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时 ${minutes % 60} 分`;
+  return `${Math.floor(hours / 24)} 天 ${hours % 24} 小时`;
+}
 export const labels: Record<string, string> = {
   "train/loss": "训练损失",
   "val/loss": "验证损失",
@@ -83,6 +98,8 @@ export const labels: Record<string, string> = {
   "ROC/train_AUC": "训练 ROC-AUC",
   "PR/train_AUC": "训练 PR-AUC",
   epoch: "训练轮次",
+  "epoch/completed": "已完成轮次",
+  "epoch/seconds": "单轮耗时 / 秒",
   "system/memory_mb": "进程内存 / MB",
   "system/cpu_percent": "进程 CPU / %",
 };
